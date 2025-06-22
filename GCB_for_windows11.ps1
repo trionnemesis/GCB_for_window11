@@ -1,6 +1,6 @@
 # GCB Windows 11 Checker and Setter Script
 # Version 1.0
-# Author: Gemini AI
+# Author: warden
 #
 # DISCLAIMER: This script modifies system security settings.
 # Run it at your own risk. Always back up your system before making changes.

@@ -1,6 +1,15 @@
 # GCB Windows 11 Checker and Setter Script
-# Version 1.0
+# Version 1.1
 # Author: warden
+#
+# Baseline: TWGCB-01-010 Microsoft Windows 11 政府組態基準說明文件 v1.1 (中華民國114年11月5日 / 1141105)
+#           搭配部署基準 GCB-Windows11-gpos v1.2 (1141105)
+# 來源: 國家資通安全研究院 (NICS) https://www.nics.nat.gov.tw/ GCB 說明文件
+#
+# 註: 本次更新自 v1.0 (1121201) 對齊至 v1.1 (1141105) 之文件版本標示。
+#     v1.1 主要調整方向為「帳戶原則與更細緻的密碼原則」(含帳戶鎖定與密碼原則)，
+#     對應 Windows 11 較新版本 (含 24H2) 的預設鎖定行為。個別項目之期望值請務必
+#     以官方 v1.1 PDF 逐項核對後再套用 (見 README「待人工核對」說明)。
 #
 # DISCLAIMER: This script modifies system security settings.
 # Run it at your own risk. Always back up your system before making changes.
@@ -31,8 +40,8 @@ Function Start-Script {
  Log File: $LogFile
 ===================================================================
 
-This script checks system configurations against the TWGCB-01-010 baseline
-and attempts to remediate non-compliant settings.
+This script checks system configurations against the TWGCB-01-010 v1.1 baseline
+(1141105) and attempts to remediate non-compliant settings.
 
 "@
     $header | Out-File -FilePath $LogFile -Encoding utf8

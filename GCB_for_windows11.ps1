@@ -7,7 +7,7 @@
 # This script MUST be run with Administrator privileges.
 
 # --- Script Setup ---
-$LogFile = "$PSScriptRoot\wondows11_gcb_checkandset.txt"
+$LogFile = "$PSScriptRoot\windows11_gcb_checkandset.txt"
 $SecEditExportFile = "$env:temp\secedit_export.inf"
 $SecEditImportFile = "$env:temp\secedit_import.inf"
 

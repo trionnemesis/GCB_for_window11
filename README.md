@@ -1,5 +1,11 @@
 # Windows 11 政府組態基準 (GCB) 自動化檢測與修正指令碼
 
+一鍵掃描並修復 Windows 11 是否符合台灣政府組態基準（TWGCB-01-010），並自動產生稽核日誌。
+
+![Platform](https://img.shields.io/badge/Platform-Windows%2011-0078D6?logo=windows11&logoColor=white)
+![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
 ## 摘要
 
 本 PowerShell 指令碼旨在協助系統管理員根據國家資通安全研究院發布的「**Microsoft Windows 11 政府組態基準說明文件 (TWGCB-01-010)**」，自動化地檢測與修正本機設定。
@@ -18,34 +24,33 @@
 
 * **自動化檢測**: 自動比對目前系統設定與 GCB 文件中的建議值。
 * **自動化修正**: 對於不符合 GCB 要求的設定，嘗試自動更新為建議值。
-* **詳細日誌**: 產生一份名為 `wondows11_gcb_checkandset.txt` 的日誌檔案，詳細記錄每項檢查的結果，包含：
+* **詳細日誌**: 產生一份名為 `windows11_gcb_checkandset.txt` 的日誌檔案，詳細記錄每項檢查的結果，包含：
     * 已符合的項目 (`COMPLIANT`)
     * 已成功修改的項目 (`MODIFIED`)
     * 修改失敗的項目 (`FAILURE`)
 
 ## 🚀 如何使用
 
-1.  **儲存指令碼**: 將提供的 PowerShell 程式碼儲存為 `GCB_Checker.ps1`。
+1.  **取得程式碼並導覽至目錄**:
+    ```powershell
+    git clone https://github.com/trionnemesis/GCB_for_window11.git
+    cd GCB_for_window11
+    ```
 2.  **執行 PowerShell (系統管理員)**:
     * 點擊「開始」功能表。
     * 輸入 `PowerShell`。
     * 在「Windows PowerShell」上按一下右鍵，選擇「**以系統管理員身分執行**」。
-3.  **設定執行原則 (若需要)**: 為了允許本機指令碼執行，請在 PowerShell 視窗中輸入以下命令，並按下 `Y` 確認：
+3.  **設定執行原則 (若需要)**: 為了允許本機指令碼執行，請在 PowerShell 視窗中輸入以下命令：
     ```powershell
-    Set-ExecutionPolicy RemoteSigned
+    Set-ExecutionPolicy RemoteSigned -Scope Process
     ```
-4.  **導覽至指令碼目錄**: 使用 `cd` 命令切換到您儲存 `GCB_Checker.ps1` 檔案的資料夾。
+4.  **執行指令碼**: 確認目前所在目錄為 clone 下來的 `GCB_for_window11` 資料夾後，輸入以下命令執行：
     ```powershell
-    # 範例：如果檔案在 D:\Scripts
-    cd D:\Scripts
+    .\GCB_for_windows11.ps1
     ```
-5.  **執行指令碼**: 在 PowerShell 中輸入以下命令執行：
-    ```powershell
-    .\GCB_Checker.ps1
-    ```
-6.  **檢視結果**:
+5.  **檢視結果**:
     * 指令碼會在主控台畫面上即時顯示執行進度與結果。
-    * 執行完畢後，請開啟與指令碼位於相同資料夾的 `wondows11_gcb_checkandset.txt` 檔案，以檢視完整的執行報告。
+    * 執行完畢後，請開啟與指令碼位於相同資料夾的 `windows11_gcb_checkandset.txt` 檔案，以檢視完整的執行報告。
 
 ## 📄 日誌檔案說明
 
@@ -116,3 +121,11 @@
 ## 參考文件
 
 * **政府組態基準 (GCB) 文件**: `TWGCB-01-010_Microsoft Windows 11政府組態基準說明文件v1.0_1121201.pdf` 
+
+## Related projects
+
+* [GCB_for_rockylinux](https://github.com/trionnemesis/GCB_for_rockylinux) — 同系列的 Rocky Linux 政府組態基準自動化檢測與修正指令碼。
+
+## License
+
+本專案採用 [MIT License](LICENSE) 授權。

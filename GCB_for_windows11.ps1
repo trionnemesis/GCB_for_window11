@@ -1,5 +1,5 @@
 # GCB Windows 11 Checker and Setter Script
-# Version 1.0
+# Version 1.1
 # Author: warden
 #
 # DISCLAIMER: This script modifies system security settings.
@@ -80,7 +80,7 @@ Function Check-Set-RegistryValue {
             New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
         }
         $currentValue = (Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue).$Name
-        
+
         if ($currentValue -eq $ExpectedValue) {
             Write-Log "Result: '$Name' is already compliant. (Value: $currentValue)" -Status "COMPLIANT"
         } else {
@@ -99,18 +99,37 @@ Function Check-Set-RegistryValue {
 }
 
 # Function to check and set Local Security Policy values (Account Policies)
+#
+# Comparison modes (GCB account-policy requirements are ranges/thresholds, not exact values):
+#   Equal         : current must equal $ExpectedValue (default; use for on/off toggles)
+#   AtLeast       : current must be >= $ExpectedValue (e.g. 最小密碼長度、密碼最短使用期限)
+#   AtMostNonZero : current must be > 0 AND <= $ExpectedValue (e.g. 密碼最長使用期限、帳戶鎖定閾值,
+#                   where 0 has the special meaning "never expires" / "never locked out" and must
+#                   itself be treated as NON-COMPLIANT)
+#
+# NOTE (bug fix): this function previously compared with a strict "-eq $ExpectedValue" for every
+# policy. Because TWGCB-01-010 account-policy items are actually ranges/thresholds (e.g. "password
+# length >= 8"), that exact-match logic produced false-positive NON-COMPLIANT findings whenever the
+# current value was already stricter than the threshold (e.g. a configured password length of 14
+# was flagged non-compliant against an ExpectedValue of 8), and remediation would then WEAKEN an
+# already-compliant, stricter setting down to the bare threshold. The -Comparison parameter fixes
+# this: when non-compliant, remediation still writes $ExpectedValue (the GCB threshold), which is
+# correct in both directions (raises a too-weak value to the threshold, and no longer touches a
+# value that is already at or beyond the threshold).
 Function Check-Set-SecurityPolicy {
     param (
         [Parameter(Mandatory=$true)] [string]$PolicyName,
         [Parameter(Mandatory=$true)] [int]$ExpectedValue,
-        [Parameter(Mandatory=$true)] [string]$Description
+        [Parameter(Mandatory=$true)] [string]$Description,
+        [ValidateSet("Equal", "AtLeast", "AtMostNonZero")]
+        [string]$Comparison = "Equal"
     )
-    Write-Log "Checking: $Description" -Status "INFO"
-    
+    Write-Log "Checking: $Description (rule: $Comparison $ExpectedValue)" -Status "INFO"
+
     # Export current settings
     secedit /export /cfg $SecEditExportFile /quiet
     $content = Get-Content $SecEditExportFile
-    
+
     $currentValueLine = $content | Select-String -Pattern "^$PolicyName\s*=" -CaseSensitive
     if ($currentValueLine) {
         $currentValue = ($currentValueLine -split "=")[1].Trim()
@@ -118,10 +137,22 @@ Function Check-Set-SecurityPolicy {
         $currentValue = "Not Found"
     }
 
-    if ($currentValue -eq $ExpectedValue) {
+    # Evaluate compliance according to the comparison mode (range/threshold, not exact match).
+    $isCompliant = $false
+    $currentInt = 0
+    $isNumeric = [int]::TryParse([string]$currentValue, [ref]$currentInt)
+    if ($isNumeric) {
+        switch ($Comparison) {
+            "AtLeast"       { $isCompliant = ($currentInt -ge $ExpectedValue) }
+            "AtMostNonZero" { $isCompliant = ($currentInt -gt 0 -and $currentInt -le $ExpectedValue) }
+            default         { $isCompliant = ($currentInt -eq $ExpectedValue) }
+        }
+    }
+
+    if ($isCompliant) {
         Write-Log "Result: '$PolicyName' is already compliant. (Value: $currentValue)" -Status "COMPLIANT"
     } else {
-        Write-Log "Result: '$PolicyName' is NON-COMPLIANT. (Current: '$currentValue', Expected: '$ExpectedValue')" -Status "FAILURE"
+        Write-Log "Result: '$PolicyName' is NON-COMPLIANT. (Current: '$currentValue', Required: '$Comparison $ExpectedValue')" -Status "FAILURE"
         try {
             # Create an import file with only the required change
             "[System Access]`n$PolicyName = $ExpectedValue" | Out-File $SecEditImportFile -Encoding "Unicode"
@@ -177,23 +208,20 @@ Write-Log "================= Starting GCB Checks =================" -Status "INF
 # --- 帳戶原則 (Account Policies) ---
 Write-Log "Section: Account Policies" -Status "INFO"
 
-# TWGCB-01-010-0001: 密碼最短使用期限 (1天)
-Check-Set-SecurityPolicy -PolicyName "MinimumPasswordAge" -ExpectedValue 1 -Description "密碼最短使用期限"
+# TWGCB-01-010-0001: 密碼最短使用期限 (1天以上) -> compliant when current >= 1
+Check-Set-SecurityPolicy -PolicyName "MinimumPasswordAge" -ExpectedValue 1 -Comparison AtLeast -Description "密碼最短使用期限"
 
-# TWGCB-01-010-0002: 密碼最長使用期限 (90天以下)
-# This check is complex (less than 90). Script will enforce 90.
-Check-Set-SecurityPolicy -PolicyName "MaximumPasswordAge" -ExpectedValue 90 -Description "密碼最長使用期限"
+# TWGCB-01-010-0002: 密碼最長使用期限 (1~90天，不可為0/永不過期) -> compliant when 0 < current <= 90
+Check-Set-SecurityPolicy -PolicyName "MaximumPasswordAge" -ExpectedValue 90 -Comparison AtMostNonZero -Description "密碼最長使用期限"
 
-# TWGCB-01-010-0003: 最小密碼長度 (8個字元以上)
-# This check is complex (greater than 8). Script will enforce 8.
-Check-Set-SecurityPolicy -PolicyName "MinimumPasswordLength" -ExpectedValue 8 -Description "最小密碼長度"
+# TWGCB-01-010-0003: 最小密碼長度 (8個字元以上) -> compliant when current >= 8 (stricter existing values are kept)
+Check-Set-SecurityPolicy -PolicyName "MinimumPasswordLength" -ExpectedValue 8 -Comparison AtLeast -Description "最小密碼長度"
 
-# TWGCB-01-010-0004: 密碼必須符合複雜性需求 (啟用)
-Check-Set-SecurityPolicy -PolicyName "PasswordComplexity" -ExpectedValue 1 -Description "密碼必須符合複雜性需求"
+# TWGCB-01-010-0004: 密碼必須符合複雜性需求 (啟用) -> boolean toggle, exact match is correct
+Check-Set-SecurityPolicy -PolicyName "PasswordComplexity" -ExpectedValue 1 -Comparison Equal -Description "密碼必須符合複雜性需求"
 
-# TWGCB-01-010-0007: 帳戶鎖定閾值 (5次以下)
-# This check is complex (less than 5). Script will enforce 5.
-Check-Set-SecurityPolicy -PolicyName "LockoutBadCount" -ExpectedValue 5 -Description "帳戶鎖定閾值"
+# TWGCB-01-010-0007: 帳戶鎖定閾值 (1~5次，不可為0/永不鎖定) -> compliant when 0 < current <= 5
+Check-Set-SecurityPolicy -PolicyName "LockoutBadCount" -ExpectedValue 5 -Comparison AtMostNonZero -Description "帳戶鎖定閾值"
 
 
 # --- 電腦設定\系統管理範本 (Computer Settings - Administrative Templates) ---

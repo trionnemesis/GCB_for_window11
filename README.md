@@ -82,9 +82,10 @@
     ```powershell
     # TWGCB-01-010-0009: 帳戶鎖定期間 (15分鐘以上)
     # Script enforces 15 minutes
-    Check-Set-SecurityPolicy -PolicyName "LockoutDuration" -ExpectedValue 15 -Description "帳戶鎖定期間"
+    Check-Set-SecurityPolicy -PolicyName "LockoutDuration" -ExpectedValue 15 -Comparison AtLeast -Description "帳戶鎖定期間"
     ```
 * `PolicyName` 需對應 `.inf` 設定檔中的關鍵字，常見的對應可參考網路文件或匯出的 `$env:temp\secedit_export.inf` 檔案。
+* `-Comparison` 參數請依該項目的實際規則語意選擇 `Equal`（固定值/開關）、`AtLeast`（下限，數值需大於等於門檻）或 `AtMostNonZero`（上限且不可為 0，數值需大於 0 且小於等於門檻）；詳見下方「變更紀錄」。
 
 ### 2. 系統管理範本設定 (使用登錄檔)
 
@@ -121,7 +122,31 @@
 ## 參考文件
 
 * **政府組態基準 (GCB) 文件**: `TWGCB-01-010_Microsoft Windows 11政府組態基準說明文件v1.0_1121201.pdf` 
+* **目前採用版本**：TWGCB-01-010 **v1.0**（中華民國112年12月1日 / 1121201）。截至 2026-07-17，經複核未發現官方已發布更新版本，詳見下方「變更紀錄」。
 
+## 變更紀錄
+
+* **2026-07-17**：修正帳戶原則檢查的比對邏輯錯誤，並複核目前基準版本。
+    * **邏輯修正（Bug fix）**：`Check-Set-SecurityPolicy` 先前一律以完全相等 (`-eq`) 判斷帳戶原則是否合規，但 TWGCB-01-010 對應的帳戶原則項目實際規定為「範圍／門檻」而非單一固定值。這導致：
+        1. 已符合、甚至**更嚴格**的既有設定（例如最小密碼長度已設為 14、帳戶鎖定閾值已設為 3）被誤判為 `NON-COMPLIANT`；
+        2. 觸發修正動作後，反而把原本更嚴格的設定**弱化**至門檻值（例如密碼長度 14 → 8）；
+        3. 未正確判斷「0」在部分項目中代表「永不過期／永不鎖定」的不合規特殊值。
+
+      修正方式：為 `Check-Set-SecurityPolicy` 新增 `-Comparison` 參數（`Equal` / `AtLeast` / `AtMostNonZero`），並依各項目的正確規則語意套用：
+
+      | TWGCB-ID | 項目 | 規則語意 | 修正前 | 修正後 (`-Comparison`) |
+      |---|---|---|---|---|
+      | 0001 | 密碼最短使用期限 | ≥ 1 天 | `-eq 1` | `AtLeast 1` |
+      | 0002 | 密碼最長使用期限 | 1~90 天（不可為 0/永不過期） | `-eq 90` | `AtMostNonZero 90` |
+      | 0003 | 最小密碼長度 | ≥ 8 字元（保留既有更嚴格設定） | `-eq 8` | `AtLeast 8` |
+      | 0004 | 密碼必須符合複雜性需求 | 啟用（布林開關，維持精確比對） | `-eq 1` | `Equal 1`（行為不變） |
+      | 0007 | 帳戶鎖定閾值 | 1~5 次（不可為 0/永不鎖定） | `-eq 5` | `AtMostNonZero 5` |
+
+      指令碼自身版本號由 `1.0` 提升為 `1.1`（見 `GCB_for_windows11.ps1` 檔頭），此版本號僅代表**本指令碼**的修正版次，與下方 GCB 基準版本無關。
+
+    * **基準版本複核**：本次同時複核 NICS（國家資通安全研究院）目前公告之 Windows 11 GCB 基準版本。本工作階段的網路政策封鎖 `www.nics.nat.gov.tw` 與 `download.nics.nat.gov.tw`（連線回應 403），故改以公開網路搜尋交叉比對官方檔名與發布資訊。確認結果：現行基準仍為 **TWGCB-01-010 v1.0**（中華民國112年12月1日 / 1121201）。搜尋過程中曾出現「v1.1（1141105）」的說法，但**查無任何可驗證、可點擊的官方來源**佐證，判斷為不可靠資訊，故**不予採用**，本專案亦**不**調整 GCB 基準文件版本號。
+
+---
 ## Related projects
 
 * [GCB_for_rockylinux](https://github.com/trionnemesis/GCB_for_rockylinux) — 同系列的 Rocky Linux 政府組態基準自動化檢測與修正指令碼。
